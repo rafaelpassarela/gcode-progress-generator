@@ -4,7 +4,8 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Mask, Vcl.ComCtrls, IniFiles;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Mask, Vcl.ComCtrls, IniFiles,
+  System.IOUtils;
 
 type
   TFormMain = class(TForm)
@@ -35,7 +36,7 @@ type
     procedure LoadConfig;
     procedure EnableDisableAll(const Value : Boolean);
     procedure UpdateLineCount(const ATotal, ACurrent : Integer);
-    procedure Generate;
+    procedure GenerateEx;
   public
     { Public declarations }
   end;
@@ -72,7 +73,7 @@ begin
     EnableDisableAll(False);
 
     try
-      Generate;
+      GenerateEx;
     finally
       EnableDisableAll(True);
     end;
@@ -113,66 +114,108 @@ begin
   LoadConfig;
 end;
 
-procedure TFormMain.Generate;
+procedure TFormMain.GenerateEx;
 var
+  lReaderStream: TFileStream;
+  lReader: TStreamReader;  // TTextReader
+  lWriterStream: TFileStream;
+  lWriter: TStreamWriter;
+  lTotalFileLines: Integer;
+  lTempFileName: TFileName;
   lFile: TStringList;
+  lTotalLayers: Integer;
   i: Integer;
-  lTotal: Integer;
   lLine: string;
-  lCurrent: Integer;
+  lAux: string;
+  lStartTime: TTime;
+  lCurrentLayer: Integer;
 
+  procedure FreeStreamPointers;
+  begin
+    if Assigned(lReader) then
+      FreeAndNil(lReader);
+    if Assigned(lReaderStream) then
+      FreeAndNil(lReaderStream);
+
+    if Assigned(lWriter) then
+      FreeAndNil(lWriter);
+    if Assigned(lWriterStream) then
+      FreeAndNil(lWriterStream);
+  end;
 begin
+  lReader := nil;
+  lWriter := nil;
+  lReaderStream := nil;
+  lWriterStream := nil;
   try
-    lFile := TStringList.Create;
-    lFile.LoadFromFile(EditFile.Text);
+    lStartTime := Now;
 
-    ProgressBarFileGen.Max := lFile.Count;
-    UpdateLineCount(lFile.Count, 0);
-
-    // get layer count
-    lTotal := -1;
-    for i := 0 to lFile.Count - 1 do
-    begin
-      lLine := AnsiUpperCase(lFile[i]);
-      if Pos(EditLayerCount.Text, lLine) > 0 then
-      begin
-        lLine := StringReplace(lLine, EditLayerCount.Text, '', []);
-        lTotal := StrToIntDef(lLine, -1);
-      end;
-      if lTotal > 0 then
-        Break;
+    try
+      lFile := TStringList.Create;
+      lFile.LoadFromFile(EditFile.Text);
+      lTotalFileLines := lFile.Count;
+    finally
+      FreeAndNil(lFile);
     end;
 
-    Application.ProcessMessages;
+    lTempFileName := TPath.GetTempFileName;
 
-    // replace message
-    for i := 0 to lFile.Count - 1 do
+    lReaderStream := TFileStream.Create(EditFile.Text, fmOpenRead);
+    lReader := TStreamReader.Create(lReaderStream);
+
+    lWriterStream := TFileStream.Create(lTempFileName, fmOpenWrite);
+    lWriter := TStreamWriter.Create(lWriterStream);
+
+    ProgressBarFileGen.Max := lTotalFileLines;
+    UpdateLineCount(lTotalFileLines, 0);
+
+    lTotalLayers := -1;
+    i := 0;
+    while not lReader.EndOfStream do
     begin
-      if i mod 13 = 0 then
+      Inc(i);
+
+      lLine := lReader.ReadLine;
+      if (lTotalLayers = -1) and (Pos(EditLayerCount.Text, lLine) > 0) then
+      begin
+        lAux := StringReplace(lLine, EditLayerCount.Text, '', []);
+        lTotalLayers := StrToIntDef(lAux, -1);
+      end;
+
+      if (lTotalLayers > 0) and (Pos(EditLayerTag.Text, lLine) > 0) then
+      begin
+        lCurrentLayer := StrToIntDef(StringReplace(lLine, EditLayerTag.Text, '', []), -1);
+        if lCurrentLayer > -1 then
+          lLine := Format('%s %4.4d of %4.4d', ['M117 Layer', lCurrentLayer + 1, lTotalLayers]);
+      end;
+
+      // write the line to the temp file
+      lWriter.Write(lLine + sLineBreak);
+
+      // update staus
+      if i mod 130 = 0 then
       begin
         ProgressBarFileGen.Position := i + 1;
         UpdateLineCount(ProgressBarFileGen.Max, ProgressBarFileGen.Position);
 
-        ProgressBarFileGen.Refresh;
-        LabelStatus.Refresh;
-      end;
-
-      lLine := lFile[i];
-      if Pos(EditLayerTag.Text, lLine) > 0 then
-      begin
-        lCurrent := StrToIntDef(StringReplace(lLine, EditLayerTag.Text, '', []), -1);
-        if lCurrent > -1 then
-        begin
-          lLine := Format('%s %4.4d of %4.4d', ['M117 Layer', lCurrent + 1, lTotal]);
-          lFile[i] := lLine;
-        end;
+        Application.ProcessMessages;
       end;
     end;
-    lFile.SaveToFile(EditFile.Text);
-    ShowMessage('GCODE file successful updated!!!' + sLineBreak + sLineBreak + 'Total Layers: ' + IntToStr(lTotal));
+
+    FreeStreamPointers;
+
+    CopyFile(PChar(lTempFileName), PChar(EditFile.Text), False);
+
+    ShowMessage('GCODE file successful updated!!!' + sLineBreak + sLineBreak
+              + 'Total Layers: ' + IntToStr(lTotalLayers) + sLineBreak
+              + 'Process Time: ' + FormatDateTime('hh:mm:ss', Now - lStartTime));
   finally
+    if FileExists(lTempFileName) then
+      DeleteFile(lTempFileName);
+
+    FreeStreamPointers;
+
     EnableDisableAll(True);
-    FreeAndNil(lFile);
   end;
 end;
 
