@@ -39,6 +39,14 @@ object FormMain: TFormMain
     Height = 13
     Caption = 'GCODE Layer Count Tag'
   end
+  object LabelStatus: TLabel
+    Left = 232
+    Top = 129
+    Width = 89
+    Height = 13
+    Caption = 'Line Count: x of y'
+    Visible = False
+  end
   object EditFile: TEdit
     Left = 16
     Top = 27

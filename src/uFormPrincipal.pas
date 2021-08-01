@@ -17,10 +17,12 @@ type
     EditLayerCount: TEdit;
     ButtonGenerate: TButton;
     ProgressBarFileGen: TProgressBar;
+    LabelStatus: TLabel;
     procedure ButtonFileClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure ButtonGenerateClick(Sender: TObject);
   private const
+    C_LINE_COUNT = 'Line Count: ';
     C_SECTION = 'config';
     C_IDENT_FILE = 'file.name';
     C_IDENT_TAG  = 'layer.tag';
@@ -32,6 +34,8 @@ type
     procedure SaveConfig;
     procedure LoadConfig;
     procedure EnableDisableAll(const Value : Boolean);
+    procedure UpdateLineCount(const ATotal, ACurrent : Integer);
+    procedure Generate;
   public
     { Public declarations }
   end;
@@ -60,60 +64,15 @@ begin
 end;
 
 procedure TFormMain.ButtonGenerateClick(Sender: TObject);
-var
-  lFile: TStringList;
-  i: Integer;
-  lTotal: Integer;
-  lLine: string;
-  lCurrent: Integer;
 begin
   SaveConfig;
   if FileExists(EditFile.Text) then
   begin
+    LabelStatus.Caption := C_LINE_COUNT;
     EnableDisableAll(False);
 
     try
-      lFile := TStringList.Create;
-      lFile.LoadFromFile(EditFile.Text);
-
-      ProgressBarFileGen.Max := lFile.Count;
-
-      // get layer count
-      lTotal := -1;
-      for i := 0 to lFile.Count - 1 do
-      begin
-        lLine := AnsiUpperCase(lFile[i]);
-        if Pos(EditLayerCount.Text, lLine) > 0 then
-        begin
-          lLine := StringReplace(lLine, EditLayerCount.Text, '', []);
-          lTotal := StrToIntDef(lLine, -1);
-        end;
-        if lTotal > 0 then
-          Break;
-      end;
-
-      // replace message
-      for i := 0 to lFile.Count - 1 do
-      begin
-        if i mod 3 = 0 then
-        begin
-          ProgressBarFileGen.Position := i + 1;
-          Application.ProcessMessages;
-        end;
-
-        lLine := lFile[i];
-        if Pos(EditLayerTag.Text, lLine) > 0 then
-        begin
-          lCurrent := StrToIntDef(StringReplace(lLine, EditLayerTag.Text, '', []), -1);
-          if lCurrent > -1 then
-          begin
-            lLine := Format('%s %4.4d of %4.4d', ['M117 Layer', lCurrent + 1, lTotal]);
-            lFile[i] := lLine;
-          end;
-        end;
-      end;
-      lFile.SaveToFile(EditFile.Text);
-      ShowMessage('GCODE file successful updated!!!');
+      Generate;
     finally
       EnableDisableAll(True);
     end;
@@ -122,6 +81,9 @@ end;
 
 procedure TFormMain.EnableDisableAll(const Value: Boolean);
 begin
+  ButtonFile.Enabled := Value;
+  ButtonGenerate.Enabled := Value;
+
   LabelFileName.Enabled := Value;
   EditFile.Enabled := Value;
 
@@ -133,12 +95,85 @@ begin
 
   ProgressBarFileGen.Visible := not Value;
   ProgressBarFileGen.Position := 0;
+
+  LabelStatus.Visible := not Value;
 end;
 
 procedure TFormMain.FormCreate(Sender: TObject);
 begin
+  {$IFDEF WIN32}
+  Self.Caption := Self.Caption + ' (x86)';
+  {$ENDIF}
+
+  {$IFDEF WIN64}
+  Self.Caption := Self.Caption + ' (x64)';
+  {$ENDIF}
+
   FConfigName := StringReplace(Application.ExeName, '.exe', '.ini', [rfIgnoreCase]);
   LoadConfig;
+end;
+
+procedure TFormMain.Generate;
+var
+  lFile: TStringList;
+  i: Integer;
+  lTotal: Integer;
+  lLine: string;
+  lCurrent: Integer;
+
+begin
+  try
+    lFile := TStringList.Create;
+    lFile.LoadFromFile(EditFile.Text);
+
+    ProgressBarFileGen.Max := lFile.Count;
+    UpdateLineCount(lFile.Count, 0);
+
+    // get layer count
+    lTotal := -1;
+    for i := 0 to lFile.Count - 1 do
+    begin
+      lLine := AnsiUpperCase(lFile[i]);
+      if Pos(EditLayerCount.Text, lLine) > 0 then
+      begin
+        lLine := StringReplace(lLine, EditLayerCount.Text, '', []);
+        lTotal := StrToIntDef(lLine, -1);
+      end;
+      if lTotal > 0 then
+        Break;
+    end;
+
+    Application.ProcessMessages;
+
+    // replace message
+    for i := 0 to lFile.Count - 1 do
+    begin
+      if i mod 13 = 0 then
+      begin
+        ProgressBarFileGen.Position := i + 1;
+        UpdateLineCount(ProgressBarFileGen.Max, ProgressBarFileGen.Position);
+
+        ProgressBarFileGen.Refresh;
+        LabelStatus.Refresh;
+      end;
+
+      lLine := lFile[i];
+      if Pos(EditLayerTag.Text, lLine) > 0 then
+      begin
+        lCurrent := StrToIntDef(StringReplace(lLine, EditLayerTag.Text, '', []), -1);
+        if lCurrent > -1 then
+        begin
+          lLine := Format('%s %4.4d of %4.4d', ['M117 Layer', lCurrent + 1, lTotal]);
+          lFile[i] := lLine;
+        end;
+      end;
+    end;
+    lFile.SaveToFile(EditFile.Text);
+    ShowMessage('GCODE file successful updated!!!' + sLineBreak + sLineBreak + 'Total Layers: ' + IntToStr(lTotal));
+  finally
+    EnableDisableAll(True);
+    FreeAndNil(lFile);
+  end;
 end;
 
 procedure TFormMain.LoadConfig;
@@ -170,6 +205,11 @@ begin
     Free;
   end;
 
+end;
+
+procedure TFormMain.UpdateLineCount(const ATotal, ACurrent: Integer);
+begin
+  LabelStatus.Caption := Format('%s %d of %d', [C_LINE_COUNT, ACurrent, ATotal]);
 end;
 
 end.
