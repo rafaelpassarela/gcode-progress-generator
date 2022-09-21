@@ -4,7 +4,7 @@ object FormMain: TFormMain
   BorderIcons = [biSystemMenu, biMinimize]
   BorderStyle = bsSingle
   Caption = 'GCODE Progress Generator'
-  ClientHeight = 200
+  ClientHeight = 202
   ClientWidth = 455
   Color = clBtnFace
   DoubleBuffered = True
@@ -16,6 +16,9 @@ object FormMain: TFormMain
   OldCreateOrder = False
   Position = poScreenCenter
   OnCreate = FormCreate
+  DesignSize = (
+    455
+    202)
   PixelsPerInch = 96
   TextHeight = 13
   object LabelFileName: TLabel
@@ -33,7 +36,7 @@ object FormMain: TFormMain
     Caption = 'GCODE Layer Tag'
   end
   object LabelLayerCount: TLabel
-    Left = 232
+    Left = 160
     Top = 64
     Width = 123
     Height = 13
@@ -41,11 +44,20 @@ object FormMain: TFormMain
   end
   object LabelStatus: TLabel
     Left = 232
-    Top = 129
+    Top = 131
     Width = 89
     Height = 13
+    Anchors = [akRight, akBottom]
     Caption = 'Line Count: x of y'
     Visible = False
+    ExplicitTop = 129
+  end
+  object LabelChangeCount: TLabel
+    Left = 303
+    Top = 61
+    Width = 75
+    Height = 13
+    Caption = 'Change Count'
   end
   object EditFile: TEdit
     Left = 16
@@ -67,34 +79,49 @@ object FormMain: TFormMain
   object EditLayerTag: TEdit
     Left = 16
     Top = 83
-    Width = 200
+    Width = 129
     Height = 21
     TabOrder = 2
     Text = ';LAYER:'
   end
   object EditLayerCount: TEdit
-    Left = 232
+    Left = 160
     Top = 83
-    Width = 200
+    Width = 129
     Height = 21
     TabOrder = 3
     Text = ';LAYER_COUNT:'
   end
   object ButtonGenerate: TButton
     Left = 16
-    Top = 120
+    Top = 122
     Width = 129
     Height = 33
+    Anchors = [akRight, akBottom]
     Caption = 'Generate'
     TabOrder = 4
     OnClick = ButtonGenerateClick
+    ExplicitTop = 120
   end
   object ProgressBarFileGen: TProgressBar
     Left = 16
-    Top = 168
+    Top = 170
     Width = 416
     Height = 17
+    Anchors = [akRight, akBottom]
     TabOrder = 5
     Visible = False
+    ExplicitTop = 168
+  end
+  object SpinEditChangeCount: TSpinEdit
+    Left = 303
+    Top = 83
+    Width = 129
+    Height = 22
+    Increment = 10
+    MaxValue = 2147483647
+    MinValue = 50
+    TabOrder = 6
+    Value = 0
   end
 end
